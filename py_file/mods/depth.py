@@ -4,7 +4,7 @@ import shutil
 
 def get_depth(a,b):
     depth = abs(a-b)
-    txt = f'depth 1 : {a}\ndepth_2 : {b}\nfinal_depth {depth}'
+    txt = f'depth_1 : {a*100:.3f}cm\ndepth_2 : {b*100:.3f}cm\nfinal_depth {depth*100:.3f}cm'
     with open('temp_img/depth.txt', 'w') as f:
         f.write(txt)
 def move(name):

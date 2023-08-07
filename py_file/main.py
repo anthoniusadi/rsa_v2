@@ -5,11 +5,15 @@ import numpy as np
 import cv2
 import mods
 
+from mods.modules import detect,nothing,thresholding,preprocessing,calc_foreground_percentage,pixel_cm
+def nothing(x):
+    pass
 cursor_x, cursor_y = 0, 0  
 depth_value = 0
 depth_frame = None  
 first_take = 0
 klik=0
+kernel = np.ones((3, 3), np.uint8)
 second_take = 0
 def on_mouse_click(event, x, y, flags, param):
     global cursor_x, cursor_y, aligned_depth_frame,depth_value ,klik,first_take,second_take
@@ -23,9 +27,9 @@ def on_mouse_click(event, x, y, flags, param):
                 first_take = depth_value
             elif klik==2:
                 klik = 0
-                second_take = depth_value
+                second_take =depth_value
                 mods.depth.get_depth(first_take,second_take)
-            print(f'first : {first_take} second : {second_take}')
+            # print(f'first : {first_take} second : {second_take}')
             print(f"Depth ({cursor_x}, {cursor_y}): {depth_value*100:.5f} Cm")
             
             return f"Depth ({cursor_x}, {cursor_y}): {depth_value*100:.5f} Cm"
@@ -112,12 +116,74 @@ try:
         
         key = cv2.waitKey(1)
         if key & 0xFF == ord('c'):
-            cv2.imwrite('data/test_depth.jpg',depth_image_with_cursor)
-            cv2.imwrite('data/test_rgb.jpg',bg_removed)
-            
+            cv2.imwrite('temp_img/test_depth.jpg',depth_image_with_cursor)
+            cv2.imwrite('temp_img/test_rgb.jpg',bg_removed)
+            cv2.destroyAllWindows()
+            break
+            # 
             
         if key & 0xFF == ord('q') or key == 27:
             cv2.destroyAllWindows()
             break
 finally:
+    global x_cor,y_cor,w_cor,h_cor
+    x_cor = None
     pipeline.stop()
+    print('do roi segmentation')
+    from mods.roi import *
+    boundingbox_widget = BoundingBoxWidget()
+    while True:
+        # #########################################
+        
+
+        # #########################################
+        cv2.imshow('image', boundingbox_widget.show_image())
+        key = cv2.waitKey(1)
+
+        if key == ord('q'):
+            cv2.destroyAllWindows()
+            exit(1)
+        elif key == ord('c'):
+            cv2.destroyAllWindows()
+            # exit(1)
+            path_file = 'temp_img/coordinates.txt'
+            f = open(path_file)
+            coordinates=[]
+            for i in f.read().split(','):
+                coordinates.append(int(i))
+            f.close()
+            print(coordinates[0],coordinates[1],coordinates[2],coordinates[3])
+            img = cv2.imread('temp_img/test_rgb.jpg')
+            crop = img[int(coordinates[1]):int(coordinates[1])+int(coordinates[3]), int(coordinates[1]):int(coordinates[1])+int(coordinates[2])]
+            # cv2.imshow('crop',crop)
+            # cv2.waitKey()
+            
+            segmentasi = mods.preprocessing(crop)
+            
+            blur = segmentasi.blur(3,1)
+            hsv = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
+            cv2.namedWindow("HSV Value")
+            cv2.createTrackbar("H MIN", "HSV Value", 0, 179, nothing)
+            cv2.createTrackbar("S MIN", "HSV Value", 0, 255, nothing)
+            cv2.createTrackbar("V MIN", "HSV Value", 0, 255, nothing)
+            cv2.createTrackbar("H MAX", "HSV Value", 179, 255, nothing)
+            cv2.createTrackbar("S MAX", "HSV Value", 255, 255, nothing)
+            cv2.createTrackbar("V MAX", "HSV Value", 255, 255, nothing)
+            h_min = cv2.getTrackbarPos("H MIN", "HSV Value")
+            s_min = cv2.getTrackbarPos("S MIN", "HSV Value")
+            v_min = cv2.getTrackbarPos("V MIN", "HSV Value")
+            h_max = cv2.getTrackbarPos("H MAX", "HSV Value")
+            s_max = cv2.getTrackbarPos("S MAX", "HSV Value")
+            v_max = cv2.getTrackbarPos("V MAX", "HSV Value")                
+            lower_value = np.array([h_min, s_min, v_min])
+            upper_value = np.array([h_max, s_max, v_max])     
+            mask = cv2.inRange(hsv, lower_value, upper_value)
+            result = cv2.bitwise_and(crop, crop, mask=mask)
+            dilation = cv2.dilate(result, kernel, iterations=2)
+            
+            cx,cy,luas,edge,x,y,w,h = detect(dilation)  
+            cv2.rectangle(crop,(x,y),(x+w,y+h),(250,45,0),1) 
+            cv2.imshow('original_cam',dilation)         
+            cv2.waitKey()
+            cv2.destroyAllWindows()
+            exit(1)
